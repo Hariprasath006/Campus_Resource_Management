@@ -1,9 +1,9 @@
-// pages/staff/StaffResources.jsx — now with centered modal like StudentResources
+// pages/staff/StaffResources.jsx — Review & approve/reject pending student bookings
 
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../../components/Layout";
-import { getResources, createBooking } from "../../api/api";
+import { getBookings, updateBookingStatus } from "../../api/api";
 import { getUser } from "../../utils/auth";
 
 export default function StaffResources() {
@@ -14,187 +14,143 @@ export default function StaffResources() {
     if (!user || user.role !== "STAFF") navigate("/");
   }, [user, navigate]);
 
-  const [resources, setResources] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedResource, setSelectedResource] = useState(null);
-  const [bookingDate, setBookingDate] = useState("");
-  const [timeSlot, setTimeSlot] = useState("");
+  const [pendingBookings, setPendingBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const loadResources = async () => {
+  const loadPendingBookings = async () => {
     try {
-      const res = await getResources();
-      setResources(res.data || []);
+      const res = await getBookings();
+      // Only show PENDING bookings (student requests)
+      const pending = res.data.filter(b => b.status === "PENDING");
+      setPendingBookings(pending || []);
+      setError(null);
     } catch (err) {
-      alert("Failed to load resources");
+      setError("Failed to load pending student requests");
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadResources();
+    loadPendingBookings();
   }, []);
 
-  const openBookingModal = (resource) => {
-    if (resource.status !== "AVAILABLE") {
-      alert("Resource not available");
-      return;
-    }
-
-    setSelectedResource(resource);
-    setBookingDate("");
-    setTimeSlot("");
-    setShowModal(true);
-  };
-
-  const closeModal = () => {
-    setShowModal(false);
-    setSelectedResource(null);
-    setBookingDate("");
-    setTimeSlot("");
-  };
-
-  const handleBook = async () => {
-    if (!bookingDate || !timeSlot) {
-      alert("Please select date and time slot");
-      return;
-    }
+  const handleAction = async (bookingId, newStatus) => {
+    if (!window.confirm(`Are you sure you want to ${newStatus.toLowerCase()} this booking?`)) return;
 
     try {
-      await createBooking({
-        userId: user.id,
-        resourceId: selectedResource.id,
-        bookingDate,
-        timeSlot
-      });
-
-      alert("✅ Booking Created Successfully!");
-      closeModal();
-      loadResources(); // refresh UI
+      await updateBookingStatus(bookingId, newStatus);
+      loadPendingBookings(); // refresh list
+      alert(`Booking ${newStatus.toLowerCase()} successfully!`);
     } catch (err) {
-      alert("❌ Slot already booked or error occurred");
+      alert("Failed to update booking status");
+      console.error(err);
     }
   };
+
+  const shortenId = (id) => id ? id.slice(0, 8) + "..." : "?";
+
+  if (loading) {
+    return (
+      <Layout>
+        <div style={{ textAlign: "center", padding: "80px", color: "#64748b" }}>
+          Loading pending student requests...
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "24px" }}>
-        <h2 style={{ marginBottom: "24px" }}>Available Resources 🏫</h2>
+      <div style={{ maxWidth: "1300px", margin: "0 auto", padding: "24px" }}>
+        <h2 style={{ marginBottom: "24px" }}>Pending Student Booking Requests 📋</h2>
 
-        <div className="grid">
-          {resources.map(r => (
-            <div key={r.id} className="card">
-              <h3>{r.name}</h3>
-              <p><strong>Type:</strong> {r.type}</p>
-              <p><strong>Capacity:</strong> {r.capacity}</p>
-              <p>
-                <strong>Status:</strong>{" "}
-                <span className={`badge ${r.status === "AVAILABLE" ? "green" : "red"}`}>
-                  {r.status}
-                </span>
-              </p>
-              <button
-                disabled={r.status !== "AVAILABLE"}
-                onClick={() => openBookingModal(r)}
-                style={{ width: "100%", marginTop: "12px" }}
-              >
-                {r.status === "AVAILABLE" ? "Book This Resource" : "Unavailable"}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+        {error && <p style={{ color: "#ef4444", marginBottom: "16px" }}>{error}</p>}
 
-      {/* Centered Modal - same style as StudentResources */}
-      {showModal && selectedResource && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0, 0, 0, 0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={closeModal}
-        >
-          <div
-            style={{
-              background: "white",
-              borderRadius: "16px",
-              width: "480px",
-              maxWidth: "90%",
-              padding: "32px",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <h3 style={{ marginBottom: "20px", textAlign: "center" }}>
-              Book {selectedResource.name}
-            </h3>
-
-            <p style={{ color: "#64748b", marginBottom: "24px", textAlign: "center" }}>
-              Type: {selectedResource.type} • Capacity: {selectedResource.capacity}
-            </p>
-
-            <label style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
-              Select Date
-            </label>
-            <input
-              type="date"
-              value={bookingDate}
-              onChange={e => setBookingDate(e.target.value)}
-              style={{ width: "100%", padding: "12px", marginBottom: "20px", borderRadius: "8px", border: "1px solid #d1d5db" }}
-            />
-
-            <label style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}>
-              Select Time Slot
-            </label>
-            <input
-              placeholder="e.g. 10:00-11:00"
-              value={timeSlot}
-              onChange={e => setTimeSlot(e.target.value)}
-              style={{ width: "100%", padding: "12px", marginBottom: "32px", borderRadius: "8px", border: "1px solid #d1d5db" }}
-            />
-
-            <div style={{ display: "flex", gap: "16px" }}>
-              <button
-                onClick={closeModal}
-                style={{
-                  flex: 1,
-                  background: "#6b7280",
-                  color: "white",
-                  border: "none",
-                  padding: "14px",
-                  borderRadius: "10px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-
-              <button
-                onClick={handleBook}
-                style={{
-                  flex: 1,
-                  background: "#3b82f6",
-                  color: "white",
-                  border: "none",
-                  padding: "14px",
-                  borderRadius: "10px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Confirm Booking
-              </button>
-            </div>
+        {pendingBookings.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 0", color: "#64748b" }}>
+            No pending booking requests to review
           </div>
-        </div>
-      )}
+        ) : (
+          <table style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "white",
+            borderRadius: "12px",
+            overflow: "hidden",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+          }}>
+            <thead>
+              <tr style={{ background: "#f1f5f9", textAlign: "left" }}>
+                <th style={{ padding: "14px 16px" }}>Student</th>
+                <th style={{ padding: "14px 16px" }}>Resource</th>
+                <th style={{ padding: "14px 16px" }}>Date</th>
+                <th style={{ padding: "14px 16px" }}>Slot</th>
+                <th style={{ padding: "14px 16px" }}>Status</th>
+                <th style={{ padding: "14px 16px", textAlign: "center" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingBookings.map(b => (
+                <tr key={b.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                  <td style={{ padding: "14px 16px" }}>
+                    {b.userName || b.user?.name || `Student #${shortenId(b.userId)}`}
+                  </td>
+                  <td style={{ padding: "14px 16px" }}>
+                    {b.resourceName || b.resource?.name || `Resource #${shortenId(b.resourceId)}`}
+                  </td>
+                  <td style={{ padding: "14px 16px" }}>{b.bookingDate || "—"}</td>
+                  <td style={{ padding: "14px 16px" }}>{b.timeSlot || "—"}</td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <span style={{
+                      padding: "6px 14px",
+                      borderRadius: "999px",
+                      fontSize: "0.875rem",
+                      fontWeight: 500,
+                      backgroundColor: "#fef3c7",
+                      color: "#b45309",
+                    }}>
+                      Pending
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                    <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+                      <button
+                        onClick={() => handleAction(b.id, "APPROVED")}
+                        style={{
+                          background: "#10b981",
+                          color: "white",
+                          border: "none",
+                          padding: "8px 16px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleAction(b.id, "REJECTED")}
+                        style={{
+                          background: "#ef4444",
+                          color: "white",
+                          border: "none",
+                          padding: "8px 16px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </Layout>
   );
 }
