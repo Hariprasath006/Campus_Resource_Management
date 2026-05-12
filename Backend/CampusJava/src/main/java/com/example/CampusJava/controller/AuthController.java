@@ -31,7 +31,7 @@ public class AuthController {
                     .body(Map.of("message", "Missing credentials ❌"));
         }
 
-        Optional<User> userOptional = repo.findByEmail(email);
+        Optional<User> userOptional = repo.findByEmailIgnoreCase(email);
 
         if (userOptional.isEmpty()) {
             return ResponseEntity.badRequest()
