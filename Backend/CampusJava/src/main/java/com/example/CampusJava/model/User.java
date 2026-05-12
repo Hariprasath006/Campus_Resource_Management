@@ -20,11 +20,13 @@ public class User {
     @Column(unique = true)
     private String phone;
 
+    @Column(name = "password_hash", nullable = false)
     private String password;
+
     private String role;
     private String status;
 
-    @Column(updatable = false)
+    @Column(name = "created_at", updatable = false)
     private Date createdAt;
 
     @PrePersist
@@ -36,8 +38,6 @@ public class User {
     }
 
     public User() {}
-
-    /* ✅ GETTERS / SETTERS */
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
