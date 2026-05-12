@@ -9,7 +9,8 @@ import java.util.*;
 
 @RestController
 @RequestMapping("/api/resources")   // ✅ FIXED PREFIX
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "http://localhost:5173")
 public class ResourceController {
 
     private final ResourceRepository repo;
